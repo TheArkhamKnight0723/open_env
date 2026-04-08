@@ -25,7 +25,7 @@ import sys
 
 from openai import OpenAI
 
-from agents.rule_based_agent import RuleBasedAgent
+from rule_based_agent import RuleBasedAgent
 
 
 _SYSTEM_PROMPT = """You are an experienced ICU charge nurse helping an AI system
