@@ -10,7 +10,7 @@ from __future__ import annotations
 import random
 from typing import Optional
 
-from tasks.task_definitions import TASKS
+from task_definitions import TASKS
 
 
 class TaskLoader:
