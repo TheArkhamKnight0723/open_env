@@ -21,9 +21,9 @@ import pytest
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from env.icu_env import ICUResourceAllocationEnv
-from agents.rule_based_agent import RuleBasedAgent
-from tasks.task_definitions import TASKS
+from icu_env import ICUResourceAllocationEnv
+from rule_based_agent import RuleBasedAgent
+from task_definitions import TASKS
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
