@@ -44,7 +44,7 @@ import json
 import uuid
 from typing import Any
 
-from grader.icu_grader import ICUGrader
+from icu_grader import ICUGrader
 from tasks.task_loader import TaskLoader
 
 

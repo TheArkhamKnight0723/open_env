@@ -24,7 +24,7 @@ from pydantic import BaseModel
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
-from env.icu_env import ICUResourceAllocationEnv
+from icu_env import ICUResourceAllocationEnv
 
 app = FastAPI(
     title="ICU Resource Allocation — OpenEnv",
