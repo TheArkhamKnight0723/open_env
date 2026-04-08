@@ -1,0 +1,19 @@
+# Core web server and UI
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+gradio>=4.26.0
+pydantic>=2.6.0
+
+# OpenAI-compatible client (used by LLMAgent)
+openai>=1.20.0
+
+# Reinforcement learning
+stable-baselines3>=2.2.1
+gymnasium>=0.29.1
+
+# Scientific stack (gymnasium / SB3 dependencies)
+numpy>=1.26.0
+torch>=2.2.0
+
+# Utilities
+pyyaml>=6.0.1

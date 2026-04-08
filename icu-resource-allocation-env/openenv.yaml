@@ -1,0 +1,92 @@
+name: ICUResourceAllocationEnv-v1
+version: "1.0.0"
+domain: healthcare/icu_resource_allocation
+description: >
+  ICU resource allocation environment simulating patient surge scenarios.
+  The agent acts as a charge nurse deciding which patients to admit and
+  which critical-care resources (beds, ventilators, vasopressors, nurse hours)
+  to assign under scarcity constraints.
+
+entrypoint:
+  reset: POST /api/reset
+  step:  POST /api/step
+  state: GET  /api/state
+
+observation:
+  type: object
+  properties:
+    patients:
+      type: array
+      items:
+        type: object
+        properties:
+          id:               { type: string }
+          severity:         { type: integer, minimum: 1, maximum: 5 }
+          diagnosis:        { type: string }
+          age:              { type: integer }
+          time_sensitive:   { type: boolean }
+          prognosis:        { type: number, minimum: 0.0, maximum: 1.0 }
+          resources_needed:
+            type: object
+            properties:
+              bed:          { type: boolean }
+              ventilator:   { type: boolean }
+              nurse_hours:  { type: number }
+              vasopressors: { type: boolean }
+    resources:
+      type: object
+      properties:
+        beds:         { type: integer }
+        ventilators:  { type: integer }
+        nurses:       { type: number }
+        vasopressors: { type: integer }
+    step: { type: integer }
+    done: { type: boolean }
+
+action:
+  type: object
+  required: [allocations]
+  properties:
+    allocations:
+      type: array
+      items:
+        type: object
+        required: [patient_id, admit, resources_assigned]
+        properties:
+          patient_id: { type: string }
+          admit:      { type: boolean }
+          resources_assigned:
+            type: object
+            properties:
+              bed:          { type: boolean }
+              ventilator:   { type: boolean }
+              nurse_hours:  { type: number }
+              vasopressors: { type: boolean }
+
+reward:
+  type: number
+  minimum: 0.0
+  maximum: 1.0
+  description: >
+    Weighted composite of four grader components:
+      survival_outcome_score    (0.45) — expected patient survival
+      resource_efficiency_score (0.30) — correct resource matching
+      fairness_score            (0.15) — severity-driven, not age-driven
+      triage_correctness_score  (0.10) — correct handling of time-sensitive cases
+
+tasks:
+  - id: task_surge_001
+    difficulty: easy
+    description: "Small surge — 4 patients, tight but manageable resources."
+  - id: task_surge_002
+    difficulty: medium
+    description: "Mass casualty — 6 patients, critically scarce ventilators."
+  - id: task_surge_003
+    difficulty: hard
+    description: "Multi-wave crisis — 8 patients, cascading scarcity."
+
+infra:
+  max_episode_steps: 3
+  inference_timeout_seconds: 1200   # 20 minutes
+  min_vcpu: 2
+  max_memory_gb: 8
