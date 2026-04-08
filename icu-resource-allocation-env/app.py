@@ -27,10 +27,10 @@ sys.path.insert(0, str(ROOT))
 # Import the FastAPI app directly from server — it already has all endpoints
 from server import app
 
-from env.icu_env import ICUResourceAllocationEnv
-from agents.rule_based_agent import RuleBasedAgent
-from agents.llm_agent import LLMAgent
-from tasks.task_definitions import TASKS
+from icu_env import ICUResourceAllocationEnv
+from rule_based_agent import RuleBasedAgent
+from llm_agent import LLMAgent
+from task_definitions import TASKS
 
 
 # ── Gradio episode runner ─────────────────────────────────────────────────
