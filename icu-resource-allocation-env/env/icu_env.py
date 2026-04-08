@@ -45,7 +45,7 @@ import uuid
 from typing import Any
 
 from icu_grader import ICUGrader
-from tasks.task_loader import TaskLoader
+from task_loader import TaskLoader
 
 
 class ICUResourceAllocationEnv:
