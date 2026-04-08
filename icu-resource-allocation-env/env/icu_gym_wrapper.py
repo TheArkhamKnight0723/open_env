@@ -20,7 +20,7 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 
-from env.icu_env import ICUResourceAllocationEnv
+from icu_env import ICUResourceAllocationEnv
 
 MAX_PATIENTS = 8
 FEATURES_PER_PATIENT = 6
