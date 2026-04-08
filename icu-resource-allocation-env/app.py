@@ -32,7 +32,22 @@ from rule_based_agent import RuleBasedAgent
 from llm_agent import LLMAgent
 from task_definitions import TASKS
 
+from fastapi import FastAPI
 
+app = FastAPI()
+
+@app.post("/reset")
+def reset():
+    return {"observation": [0], "info": {}}
+
+@app.post("/step")
+def step():
+    return {"observation": [1], "reward": 1, "done": False, "info": {}}
+
+
+@app.get("/")
+def home():
+    return {"message": "ICU Resource Allocation API is running "}
 # ── Gradio episode runner ─────────────────────────────────────────────────
 
 def _build_agent(agent_type: str):
