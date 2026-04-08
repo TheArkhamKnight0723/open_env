@@ -1,7 +1,3 @@
-"""
-app.py — HF Spaces entry point.
-Serves OpenEnv API at root via server.py, Gradio UI at /ui.
-"""
 from __future__ import annotations
 import sys
 from pathlib import Path
@@ -9,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
-# Import the REAL app from server — do NOT redefine app after this!
+# Import real app — /reset /step /state are defined in server.py
 from server import app
 
 import gradio as gr
@@ -58,5 +54,5 @@ with gr.Blocks(title="ICU Resource Allocation — OpenEnv") as _demo:
     output = gr.Textbox(label="Transcript", lines=30, interactive=False)
     run_btn.click(fn=run_episode, inputs=[task_dd, agent_dd], outputs=output)
 
-# Mount Gradio at /ui — root stays free for OpenEnv API
+# Mount Gradio at /ui — keeps root FREE for OpenEnv API
 app = gr.mount_gradio_app(app, _demo, path="/ui")
