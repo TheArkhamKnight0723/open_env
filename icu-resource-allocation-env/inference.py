@@ -1,19 +1,18 @@
 """
-inference.py  (root)
+inference.py (root)
 
 Entry point for the OpenEnv hackathon evaluator.
 
 Runs one complete episode per task using the LLM agent, with the rule-based
 agent as a fallback, and emits structured stdout logs in the required format:
 
-    [START] {"episode_id": ..., "task_id": ..., "difficulty": ...}
-    [STEP]  {"step": 1, "action": {...}, "reward": 0.83, "done": false, ...}
-    [END]   {"episode_id": ..., "task_id": ..., "total_reward": 0.83}
+  [START] {"episode_id": ..., "task_id": ..., "difficulty": ...}
+  [STEP]  {"step": 1, "action": {...}, "reward": 0.83, "done": false, ...}
+  [END]   {"episode_id": ..., "task_id": ..., "total_reward": 0.83}
 
 The script must complete within 20 minutes on vcpu=2 / 8 GB RAM.
 It reads API_BASE_URL, MODEL_NAME, and HF_TOKEN from the environment.
 """
-
 from __future__ import annotations
 
 import json
@@ -53,39 +52,39 @@ def run_episode(
     state = env.state()
     _log("[START]", {
         "episode_id": state["episode_id"],
-        "task_id":    state["task_id"],
+        "task_id": state["task_id"],
         "difficulty": state["difficulty"],
         "n_patients": len(obs["patients"]),
-        "resources":  obs["resources"],
+        "resources": obs["resources"],
     })
 
     total_reward = 0.0
-    done         = False
+    done = False
 
     while not done:
-        action           = agent.act(obs)
+        action = agent.act(obs)
         obs, reward, done, info = env.step(action)
-        total_reward     = reward  # final graded reward
+        total_reward = reward  # final graded reward
 
         _log("[STEP]", {
-            "episode_id":      info["episode_id"],
-            "step":            info["step"],
-            "reward":          reward,
-            "done":            done,
+            "episode_id": info["episode_id"],
+            "step": info["step"],
+            "reward": reward,
+            "done": done,
             "grade_breakdown": info["grade_breakdown"],
             "validation_errors": info.get("validation_errors", []),
-            "hint":            info.get("hint", ""),
+            "hint": info.get("hint", ""),
             "action_summary": {
                 "admitted": info["grade_breakdown"]["details"]["admitted"],
-                "denied":   info["grade_breakdown"]["details"]["not_admitted"],
+                "denied": info["grade_breakdown"]["details"]["not_admitted"],
             },
         })
 
     _log("[END]", {
-        "episode_id":   info["episode_id"],
-        "task_id":      task_id,
+        "episode_id": info["episode_id"],
+        "task_id": task_id,
         "total_reward": total_reward,
-        "passed":       total_reward >= 0.5,
+        "passed": total_reward >= 0.5,
     })
 
     env.close()
