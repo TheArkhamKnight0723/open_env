@@ -1,17 +1,13 @@
 """
-app.py
+app.py — Hugging Face Spaces entry point.
 
-Hugging Face Spaces entry point.
+server.py handles ALL OpenEnv endpoints at root:
+  GET  /       health check
+  POST /reset  OpenEnv reset
+  POST /step   OpenEnv step
+  GET  /state  OpenEnv state
 
-Architecture:
-  - server.py FastAPI app handles ALL OpenEnv endpoints at root:
-      GET  /       health check
-      POST /reset  OpenEnv reset
-      POST /step   OpenEnv step
-      GET  /state  OpenEnv state
-  - Gradio UI is mounted at /ui for the interactive demo
-
-The validator hits /reset, /step, /state at the ROOT — no prefix.
+Gradio UI is mounted at /ui for the interactive demo.
 """
 from __future__ import annotations
 
@@ -23,7 +19,7 @@ import gradio as gr
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
-# Import the real FastAPI app from server — it already has all endpoints
+# Import the real FastAPI app — DO NOT create a new FastAPI() after this
 from server import app
 
 from icu_env import ICUResourceAllocationEnv
@@ -32,8 +28,6 @@ from llm_agent import LLMAgent
 from task_definitions import TASKS
 
 
-# ── Gradio episode runner ────────────────────────────────────────────────────
-
 def _build_agent(agent_type: str):
     if agent_type == "LLM Agent":
         return LLMAgent()
@@ -41,7 +35,6 @@ def _build_agent(agent_type: str):
 
 
 def run_episode(task_id: str, agent_type: str) -> str:
-    """Execute one full episode and return a human-readable transcript."""
     agent = _build_agent(agent_type)
     env = ICUResourceAllocationEnv(task_id=task_id, seed=0)
     obs = env.reset(seed=0)
@@ -79,8 +72,7 @@ _task_choices = [t["task_id"] for t in TASKS]
 with gr.Blocks(title="ICU Resource Allocation — OpenEnv") as _demo:
     gr.Markdown(
         "# ICU Resource Allocation — OpenEnv\n"
-        "Select a surge scenario and an agent, then click **Run Episode** "
-        "to watch the agent allocate scarce ICU resources step-by-step.\n\n"
+        "Select a surge scenario and an agent, then click **Run Episode**.\n\n"
         "API endpoints: `POST /reset` | `POST /step` | `GET /state`"
     )
 
@@ -106,5 +98,5 @@ with gr.Blocks(title="ICU Resource Allocation — OpenEnv") as _demo:
     )
 
 
-# Mount Gradio at /ui — keeps the root free for OpenEnv API endpoints
+# Mount Gradio at /ui — keeps root free for OpenEnv validator
 app = gr.mount_gradio_app(app, _demo, path="/ui")
