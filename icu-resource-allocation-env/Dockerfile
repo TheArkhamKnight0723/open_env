@@ -1,6 +1,3 @@
-# Dockerfile — ICU Resource Allocation OpenEnv
-# Targets Hugging Face Spaces (CPU-only, 2 vCPU / 8 GB RAM).
-
 FROM python:3.11-slim
 
 # Non-root user required by HF Spaces
@@ -32,6 +29,4 @@ USER appuser
 # HF Spaces expects port 7860
 EXPOSE 7860
 
-# server:app serves all OpenEnv endpoints (/reset /step /state) at root
-# The Gradio UI is available at /ui via app:app but the validator needs root endpoints
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]

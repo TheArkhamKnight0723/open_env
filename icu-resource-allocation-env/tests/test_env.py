@@ -18,9 +18,9 @@ import pytest
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from env.icu_env import ICUResourceAllocationEnv
-from grader.icu_grader import ICUGrader
-from tasks.task_definitions import TASKS
+from icu_env import ICUResourceAllocationEnv
+from icu_grader import ICUGrader
+from task_definitions import TASKS
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────

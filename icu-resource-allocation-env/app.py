@@ -1,19 +1,14 @@
 """
-app.py
+app.py — Hugging Face Spaces entry point.
 
-Hugging Face Spaces entry point.
+server.py handles ALL OpenEnv endpoints at root:
+  GET  /       health check
+  POST /reset  OpenEnv reset
+  POST /step   OpenEnv step
+  GET  /state  OpenEnv state
 
-Architecture:
-  - server.py FastAPI app handles ALL OpenEnv endpoints at root:
-      GET  /         health check
-      POST /reset    OpenEnv reset
-      POST /step     OpenEnv step
-      GET  /state    OpenEnv state
-  - Gradio UI is mounted at /ui for the interactive demo
-
-The validator hits /reset, /step, /state at the ROOT — no prefix.
+Gradio UI is mounted at /ui for the interactive demo.
 """
-
 from __future__ import annotations
 
 import sys
@@ -24,16 +19,14 @@ import gradio as gr
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
-# Import the FastAPI app directly from server — it already has all endpoints
+# Import the real FastAPI app — DO NOT create a new FastAPI() after this
 from server import app
 
-from env.icu_env import ICUResourceAllocationEnv
-from agents.rule_based_agent import RuleBasedAgent
-from agents.llm_agent import LLMAgent
-from tasks.task_definitions import TASKS
+from icu_env import ICUResourceAllocationEnv
+from rule_based_agent import RuleBasedAgent
+from llm_agent import LLMAgent
+from task_definitions import TASKS
 
-
-# ── Gradio episode runner ─────────────────────────────────────────────────
 
 def _build_agent(agent_type: str):
     if agent_type == "LLM Agent":
@@ -42,10 +35,9 @@ def _build_agent(agent_type: str):
 
 
 def run_episode(task_id: str, agent_type: str) -> str:
-    """Execute one full episode and return a human-readable transcript."""
     agent = _build_agent(agent_type)
-    env   = ICUResourceAllocationEnv(task_id=task_id, seed=0)
-    obs   = env.reset(seed=0)
+    env = ICUResourceAllocationEnv(task_id=task_id, seed=0)
+    obs = env.reset(seed=0)
 
     lines = [f"=== Episode: {task_id} | Agent: {agent_type} ===\n"]
 
@@ -56,7 +48,7 @@ def run_episode(task_id: str, agent_type: str) -> str:
         gb = info["grade_breakdown"]
 
         admitted = gb["details"]["admitted"]
-        denied   = gb["details"]["not_admitted"]
+        denied = gb["details"]["not_admitted"]
 
         lines.append(f"── Step {info['step']} ──────────────────────")
         lines.append(f"Admitted : {', '.join(admitted) or 'none'}")
@@ -70,7 +62,7 @@ def run_episode(task_id: str, agent_type: str) -> str:
             lines.append(f"  Hint       : {info['hint']}")
         lines.append("")
 
-    lines.append(f"Final reward: {reward:.4f}  |  {'PASS' if reward >= 0.5 else 'FAIL'}")
+    lines.append(f"Final reward: {reward:.4f} | {'PASS' if reward >= 0.5 else 'FAIL'}")
     env.close()
     return "\n".join(lines)
 
@@ -80,8 +72,7 @@ _task_choices = [t["task_id"] for t in TASKS]
 with gr.Blocks(title="ICU Resource Allocation — OpenEnv") as _demo:
     gr.Markdown(
         "# ICU Resource Allocation — OpenEnv\n"
-        "Select a surge scenario and an agent, then click **Run Episode** "
-        "to watch the agent allocate scarce ICU resources step-by-step.\n\n"
+        "Select a surge scenario and an agent, then click **Run Episode**.\n\n"
         "API endpoints: `POST /reset` | `POST /step` | `GET /state`"
     )
 
@@ -98,7 +89,7 @@ with gr.Blocks(title="ICU Resource Allocation — OpenEnv") as _demo:
         )
 
     run_btn = gr.Button("Run Episode", variant="primary")
-    output  = gr.Textbox(label="Episode Transcript", lines=30, interactive=False)
+    output = gr.Textbox(label="Episode Transcript", lines=30, interactive=False)
 
     run_btn.click(
         fn=run_episode,
@@ -107,5 +98,5 @@ with gr.Blocks(title="ICU Resource Allocation — OpenEnv") as _demo:
     )
 
 
-# Mount Gradio at /ui — keeps the root free for OpenEnv API endpoints
+# Mount Gradio at /ui — keeps root free for OpenEnv validator
 app = gr.mount_gradio_app(app, _demo, path="/ui")
