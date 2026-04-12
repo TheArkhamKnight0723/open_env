@@ -1,131 +1,133 @@
 """
-inference.py (root)
-
-Entry point for the OpenEnv hackathon evaluator.
-
-Runs one complete episode per task using the LLM agent, with the rule-based
-agent as a fallback, and emits structured stdout logs in the required format:
-
-  [START] {"episode_id": ..., "task_id": ..., "difficulty": ...}
-  [STEP]  {"step": 1, "action": {...}, "reward": 0.83, "done": false, ...}
-  [END]   {"episode_id": ..., "task_id": ..., "total_reward": 0.83}
-
-The script must complete within 20 minutes on vcpu=2 / 8 GB RAM.
-It reads API_BASE_URL, MODEL_NAME, and HF_TOKEN from the environment.
+inference.py — ICU Resource Allocation OpenEnv
+Mandatory stdout format:
+  [START] task=<name> env=<benchmark> model=<model>
+  [STEP]  step=<n> action=<str> reward=<0.00> done=<true|false> error=<msg|null>
+  [END]   success=<true|false> steps=<n> score=<0.000> rewards=<r1,r2,...>
 """
-from __future__ import annotations
-
+import asyncio
 import json
 import os
-import sys
-from pathlib import Path
+from typing import List, Optional
 
-# Make sure sub-packages resolve correctly whether this is run from the root
-# or from inside the container where the working directory may differ.
-ROOT = Path(__file__).parent
-sys.path.insert(0, str(ROOT))
+import httpx
+from openai import OpenAI
 
-from icu_env import ICUResourceAllocationEnv
-from llm_agent import LLMAgent
-from rule_based_agent import RuleBasedAgent
-from task_definitions import TASKS
+# ── Required env vars ────────────────────────────────────────────────────────
+API_KEY      = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME   = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+SPACE_URL    = os.getenv("SPACE_URL", "https://shashwatpandey-0723-icu-resource-allocation.hf.space")
+TASK_NAME    = "icu_resource_allocation"
+BENCHMARK    = "icu_resource_allocation"
+MAX_STEPS    = 3
+SUCCESS_THRESHOLD = 0.5
 
+# ── Stdout loggers ───────────────────────────────────────────────────────────
+def log_start(task: str, env: str, model: str) -> None:
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
-def _log(tag: str, payload: dict) -> None:
-    """Print a structured log line and flush immediately."""
-    print(f"{tag} {json.dumps(payload, separators=(',', ':'))}", flush=True)
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    print(f"[STEP] step={step} action={action} reward={reward:.2f} done={str(done).lower()} error={error or 'null'}", flush=True)
 
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={','.join(f'{r:.2f}' for r in rewards)}", flush=True)
 
-def run_episode(
-    task_id: str,
-    agent,
-    seed: int = 0,
-) -> float:
-    """
-    Run a single episode for the given task and agent.
-    Emits [START], [STEP], and [END] log lines.
-    Returns the final episode reward.
-    """
-    env = ICUResourceAllocationEnv(task_id=task_id, seed=seed)
-    obs = env.reset(seed=seed)
+# ── LLM action ───────────────────────────────────────────────────────────────
+SYSTEM_PROMPT = """You are an ICU charge nurse AI. Given patients and available resources, decide admissions.
+Respond ONLY with valid JSON:
+{
+  "allocations": [
+    {
+      "patient_id": "p1",
+      "admit": true,
+      "resources_assigned": {
+        "bed": true,
+        "ventilator": false,
+        "nurse_hours": 4.0,
+        "vasopressors": false
+      }
+    }
+  ]
+}
+Prioritize by severity (5=critical). Do not exceed available resources."""
 
-    state = env.state()
-    _log("[START]", {
-        "episode_id": state["episode_id"],
-        "task_id": state["task_id"],
-        "difficulty": state["difficulty"],
-        "n_patients": len(obs["patients"]),
-        "resources": obs["resources"],
-    })
-
-    total_reward = 0.0
-    done = False
-
-    while not done:
-        action = agent.act(obs)
-        obs, reward, done, info = env.step(action)
-        total_reward = reward  # final graded reward
-
-        _log("[STEP]", {
-            "episode_id": info["episode_id"],
-            "step": info["step"],
-            "reward": reward,
-            "done": done,
-            "grade_breakdown": info["grade_breakdown"],
-            "validation_errors": info.get("validation_errors", []),
-            "hint": info.get("hint", ""),
-            "action_summary": {
-                "admitted": info["grade_breakdown"]["details"]["admitted"],
-                "denied": info["grade_breakdown"]["details"]["not_admitted"],
-            },
-        })
-
-    _log("[END]", {
-        "episode_id": info["episode_id"],
-        "task_id": task_id,
-        "total_reward": total_reward,
-        "passed": total_reward >= 0.5,
-    })
-
-    env.close()
-    return total_reward
-
-
-def main() -> None:
-    # Decide which agent to use based on env vars
-    api_base = os.environ.get("API_BASE_URL", "")
-    hf_token = os.environ.get("HF_TOKEN", "")
-
-    if api_base and hf_token:
-        print("[inference] Using LLMAgent.", file=sys.stderr)
-        agent = LLMAgent()
-    else:
-        print(
-            "[inference] API_BASE_URL / HF_TOKEN not set — using RuleBasedAgent.",
-            file=sys.stderr,
+def get_action(client: OpenAI, obs: dict) -> dict:
+    try:
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"Observation:\n{json.dumps(obs, indent=2)}\n\nDecide allocations."},
+            ],
+            temperature=0.2,
+            max_tokens=512,
         )
-        agent = RuleBasedAgent()
+        text = completion.choices[0].message.content.strip()
+        text = text.replace("```json", "").replace("```", "").strip()
+        return json.loads(text)
+    except Exception as e:
+        print(f"[DEBUG] LLM failed: {e}", flush=True)
+        # Rule-based fallback
+        allocations = []
+        for p in obs.get("patients", []):
+            allocations.append({
+                "patient_id": p["id"],
+                "admit": True,
+                "resources_assigned": {
+                    "bed": p["resources_needed"].get("bed", False),
+                    "ventilator": p["resources_needed"].get("ventilator", False),
+                    "nurse_hours": p["resources_needed"].get("nurse_hours", 2.0),
+                    "vasopressors": p["resources_needed"].get("vasopressors", False),
+                }
+            })
+        return {"allocations": allocations}
 
-    all_rewards: list[float] = []
+# ── Main ─────────────────────────────────────────────────────────────────────
+async def main() -> None:
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    rewards: List[float] = []
+    steps_taken = 0
+    score = 0.0
+    success = False
 
-    for task in TASKS:
-        reward = run_episode(
-            task_id=task["task_id"],
-            agent=agent,
-            seed=42,
-        )
-        all_rewards.append(reward)
+    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
 
-    mean_reward = sum(all_rewards) / len(all_rewards)
-    print(
-        json.dumps({
-            "summary": "all_tasks_complete",
-            "mean_reward": round(mean_reward, 4),
-            "per_task": dict(zip([t["task_id"] for t in TASKS], all_rewards)),
-        }, indent=2),
-        flush=True,
-    )
+    try:
+        async with httpx.AsyncClient(timeout=120) as http:
+            r = await http.post(f"{SPACE_URL}/reset", json={})
+            r.raise_for_status()
+            obs = r.json()
+            done = obs.get("done", False)
 
+            for step in range(1, MAX_STEPS + 1):
+                if done:
+                    break
+                action = get_action(client, obs)
+                action_str = json.dumps(action, separators=(",", ":"))
+                r = await http.post(f"{SPACE_URL}/step", json={"action": action})
+                r.raise_for_status()
+                result = r.json()
+                reward = float(result.get("reward", 0.0))
+                done = result.get("done", False)
+                errors = result.get("info", {}).get("validation_errors", [])
+                error = str(errors[0]) if errors else None
+                obs = result
+                rewards.append(reward)
+                steps_taken = step
+                log_step(step=step, action=action_str, reward=reward, done=done, error=error)
+                if done:
+                    break
+
+        score = sum(rewards) / len(rewards) if rewards else 0.0
+        score = min(max(score, 0.0), 1.0)
+        success = score >= SUCCESS_THRESHOLD
+
+    except Exception as e:
+        print(f"[DEBUG] Episode error: {e}", flush=True)
+
+    finally:
+        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
