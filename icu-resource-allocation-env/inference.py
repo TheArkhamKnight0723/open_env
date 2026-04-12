@@ -1,19 +1,10 @@
-"""
-inference.py — ICU Resource Allocation OpenEnv
-Mandatory stdout format:
-  [START] task=<name> env=<benchmark> model=<model>
-  [STEP]  step=<n> action=<str> reward=<0.00> done=<true|false> error=<msg|null>
-  [END]   success=<true|false> steps=<n> score=<0.000> rewards=<r1,r2,...>
-"""
 import asyncio
 import json
 import os
 from typing import List, Optional
-
 import httpx
 from openai import OpenAI
 
-# ── Required env vars ────────────────────────────────────────────────────────
 API_KEY      = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME   = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
@@ -23,36 +14,21 @@ BENCHMARK    = "icu_resource_allocation"
 MAX_STEPS    = 3
 SUCCESS_THRESHOLD = 0.5
 
-# ── Stdout loggers ───────────────────────────────────────────────────────────
-def log_start(task: str, env: str, model: str) -> None:
+def log_start(task, env, model):
     print(f"[START] task={task} env={env} model={model}", flush=True)
 
-def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+def log_step(step, action, reward, done, error):
     print(f"[STEP] step={step} action={action} reward={reward:.2f} done={str(done).lower()} error={error or 'null'}", flush=True)
 
-def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+def log_end(success, steps, score, rewards):
     print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={','.join(f'{r:.2f}' for r in rewards)}", flush=True)
 
-# ── LLM action ───────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """You are an ICU charge nurse AI. Given patients and available resources, decide admissions.
 Respond ONLY with valid JSON:
-{
-  "allocations": [
-    {
-      "patient_id": "p1",
-      "admit": true,
-      "resources_assigned": {
-        "bed": true,
-        "ventilator": false,
-        "nurse_hours": 4.0,
-        "vasopressors": false
-      }
-    }
-  ]
-}
+{"allocations": [{"patient_id": "p1", "admit": true, "resources_assigned": {"bed": true, "ventilator": false, "nurse_hours": 4.0, "vasopressors": false}}]}
 Prioritize by severity (5=critical). Do not exceed available resources."""
 
-def get_action(client: OpenAI, obs: dict) -> dict:
+def get_action(client, obs):
     try:
         completion = client.chat.completions.create(
             model=MODEL_NAME,
@@ -63,12 +39,10 @@ def get_action(client: OpenAI, obs: dict) -> dict:
             temperature=0.2,
             max_tokens=512,
         )
-        text = completion.choices[0].message.content.strip()
-        text = text.replace("```json", "").replace("```", "").strip()
+        text = completion.choices[0].message.content.strip().replace("```json","").replace("```","").strip()
         return json.loads(text)
     except Exception as e:
         print(f"[DEBUG] LLM failed: {e}", flush=True)
-        # Rule-based fallback
         allocations = []
         for p in obs.get("patients", []):
             allocations.append({
@@ -83,8 +57,7 @@ def get_action(client: OpenAI, obs: dict) -> dict:
             })
         return {"allocations": allocations}
 
-# ── Main ─────────────────────────────────────────────────────────────────────
-async def main() -> None:
+async def main():
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
     rewards: List[float] = []
     steps_taken = 0
@@ -125,7 +98,6 @@ async def main() -> None:
 
     except Exception as e:
         print(f"[DEBUG] Episode error: {e}", flush=True)
-
     finally:
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
